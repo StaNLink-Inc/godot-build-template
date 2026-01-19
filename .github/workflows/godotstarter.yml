@@ -13,10 +13,16 @@ jobs:
       
       - name: Download Godot Engine
         run: |
-          wget https://downloads.tuxfamily.org/godotengine/4.2.1/Godot_v4.2.1-stable_linux.x86_64.zip
+          # Try official download first, fallback to GitHub releases
+          wget https://downloads.tuxfamily.org/godotengine/4.2.1/Godot_v4.2.1-stable_linux.x86_64.zip || \
+          wget https://github.com/godotengine/godot/releases/download/4.2.1-stable/Godot_v4.2.1-stable_linux.x86_64.zip
+          
           unzip Godot_v4.2.1-stable_linux.x86_64.zip
           chmod +x Godot_v4.2.1-stable_linux.x86_64
           sudo mv Godot_v4.2.1-stable_linux.x86_64 /usr/local/bin/godot
+          
+          # Verify installation
+          godot --version
       
       - name: Create Godot Project
         run: |
