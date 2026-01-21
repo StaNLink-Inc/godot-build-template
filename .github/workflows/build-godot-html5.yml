@@ -159,7 +159,7 @@ jobs:
         cd godot-build-template
         
         # Upload to R2 with public access
-        aws s3 sync build/ s3://$R2_BUCKET/games/${{ github.event.inputs.project_id }}/ --endpoint-url $R2_ENDPOINT --acl public-read
+        aws s3 sync build/ s3://stan-games/${{ github.event.inputs.project_id }}/ --endpoint-url $R2_ENDPOINT --acl public-read
         
         # Set the play URL
         PLAY_URL="https://games.stanlink.online/${{ github.event.inputs.project_id }}/index.html"
