@@ -174,12 +174,14 @@ jobs:
         echo "Game will be available at: $PLAY_URL"
         
     - name: Notify build completion
+      if: success()
       env:
         STAN_API_KEY: ${{ secrets.STAN_API_KEY }}
         STAN_BACKEND_URL: ${{ secrets.STAN_BACKEND_URL }}
       run: |
         PLAY_URL="https://games.stanlink.online/${{ github.event.inputs.project_id }}/index.html"
         
+        # Notify backend
         curl -X POST "$STAN_BACKEND_URL/api/build/complete" \
           -H "Authorization: Bearer $STAN_API_KEY" \
           -H "Content-Type: application/json" \
@@ -187,5 +189,51 @@ jobs:
             \"project_id\": \"${{ github.event.inputs.project_id }}\",
             \"status\": \"success\",
             \"deploy_url\": \"$PLAY_URL\",
-            \"engine\": \"godot\"
+            \"engine\": \"godot\",
+            \"game_name\": \"${{ github.event.inputs.game_name }}\"
+          }"
+        
+        # Send success email
+        curl -X POST "https://mailer.stanlink.online/stanlink.online/mailer1/stan-build-succesful" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"to\": \"${{ secrets.NOTIFICATION_EMAIL }}\",
+            \"sender\": \"stan\",
+            \"variables\": {
+              \"subject\": \"🎮 ${{ github.event.inputs.game_name }} - Godot Build Complete!\",
+              \"game_name\": \"${{ github.event.inputs.game_name }}\",
+              \"engine\": \"Godot\",
+              \"play_url\": \"$PLAY_URL\"
+            }
+          }"
+    
+    - name: Notify build failure
+      if: failure()
+      env:
+        STAN_API_KEY: ${{ secrets.STAN_API_KEY }}
+        STAN_BACKEND_URL: ${{ secrets.STAN_BACKEND_URL }}
+      run: |
+        # Notify backend of failure
+        curl -X POST "$STAN_BACKEND_URL/api/build/complete" \
+          -H "Authorization: Bearer $STAN_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"project_id\": \"${{ github.event.inputs.project_id }}\",
+            \"status\": \"failed\",
+            \"engine\": \"godot\",
+            \"game_name\": \"${{ github.event.inputs.game_name }}\"
+          }"
+        
+        # Send failure email
+        curl -X POST "https://mailer.stanlink.online/stanlink.online/mailer1/stan-build-failed" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"to\": \"${{ secrets.NOTIFICATION_EMAIL }}\",
+            \"sender\": \"stan\",
+            \"variables\": {
+              \"subject\": \"❌ ${{ github.event.inputs.game_name }} - Godot Build Failed\",
+              \"game_name\": \"${{ github.event.inputs.game_name }}\",
+              \"engine\": \"Godot\",
+              \"error_message\": \"Build failed during GitHub Actions workflow\"
+            }
           }"
