@@ -1,0 +1,182 @@
+name: Build Godot HTML5
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'Project ID'
+        required: true
+        type: string
+      game_name:
+        description: 'Game Name'
+        required: true
+        type: string
+      build_type:
+        description: 'Build Type'
+        required: false
+        default: 'Release'
+        type: choice
+        options:
+          - Release
+          - Debug
+      compression:
+        description: 'Enable Compression'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      compression_level:
+        description: 'Compression Level (0-9)'
+        required: false
+        default: '6'
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Godot
+      uses: chickensoft-games/setup-godot@v1
+      with:
+        version: 4.3.0
+        use-dotnet: false
+        
+    - name: Download project files from R2
+      env:
+        R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+        R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+        R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      run: |
+        # Install AWS CLI for R2 access
+        sudo apt-get update
+        sudo apt-get install -y awscli
+        
+        # Configure AWS CLI for R2
+        aws configure set aws_access_key_id $R2_ACCESS_KEY
+        aws configure set aws_secret_access_key $R2_SECRET_KEY
+        aws configure set region auto
+        
+        # Download project files to godot-build-template
+        aws s3 sync s3://$R2_BUCKET/stan-projects/${{ github.event.inputs.project_id }}/ ./godot-build-template/ --endpoint-url $R2_ENDPOINT
+        
+    - name: Verify Godot project
+      run: |
+        if [ ! -f "godot-build-template/project.godot" ]; then
+          echo "Error: project.godot not found"
+          exit 1
+        fi
+        echo "Godot project verified"
+        
+    - name: Configure export settings
+      run: |
+        cd godot-build-template
+        
+        # Create export_presets.cfg if it doesn't exist
+        if [ ! -f "export_presets.cfg" ]; then
+          cat > export_presets.cfg << 'EOF'
+        [preset.0]
+        
+        name="HTML5"
+        platform="Web"
+        runnable=true
+        dedicated_server=false
+        custom_features=""
+        export_filter="all_resources"
+        include_filter=""
+        exclude_filter=""
+        export_path="build/index.html"
+        encryption_include_filters=""
+        encryption_exclude_filters=""
+        encrypt_pck=false
+        encrypt_directory=false
+        
+        [preset.0.options]
+        
+        custom_template/debug=""
+        custom_template/release=""
+        variant/extensions_support=false
+        vram_texture_compression/for_desktop=true
+        vram_texture_compression/for_mobile=false
+        html/export_icon=true
+        html/custom_html_shell=""
+        html/head_include=""
+        html/canvas_resize_policy=2
+        html/focus_canvas_on_start=true
+        html/experimental_virtual_keyboard=false
+        progressive_web_app/enabled=false
+        progressive_web_app/offline_page=""
+        progressive_web_app/display=1
+        progressive_web_app/orientation=0
+        progressive_web_app/icon_144x144=""
+        progressive_web_app/icon_180x180=""
+        progressive_web_app/icon_512x512=""
+        progressive_web_app/background_color=Color(0, 0, 0, 1)
+        EOF
+        fi
+        
+    - name: Export Godot project
+      run: |
+        cd godot-build-template
+        mkdir -p build
+        
+        # Export for HTML5
+        if [ "${{ github.event.inputs.build_type }}" = "Debug" ]; then
+          godot --headless --export-debug "HTML5" build/index.html
+        else
+          godot --headless --export-release "HTML5" build/index.html
+        fi
+        
+    - name: Apply compression
+      if: github.event.inputs.compression == 'true'
+      run: |
+        cd godot-build-template/build
+        
+        # Compress files based on compression level
+        LEVEL=${{ github.event.inputs.compression_level }}
+        
+        # Compress .wasm and .pck files
+        for file in *.wasm *.pck; do
+          if [ -f "$file" ]; then
+            gzip -$LEVEL -c "$file" > "$file.gz"
+            echo "Compressed $file"
+          fi
+        done
+        
+    - name: Upload build to R2
+      env:
+        R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+        R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+        R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      run: |
+        cd godot-build-template
+        
+        # Upload to R2 with public access
+        aws s3 sync build/ s3://$R2_BUCKET/games/${{ github.event.inputs.project_id }}/ --endpoint-url $R2_ENDPOINT --acl public-read
+        
+        # Set the play URL
+        PLAY_URL="https://games.stanlink.online/${{ github.event.inputs.project_id }}/index.html"
+        echo "Game will be available at: $PLAY_URL"
+        
+    - name: Notify build completion
+      env:
+        STAN_API_KEY: ${{ secrets.STAN_API_KEY }}
+      run: |
+        PLAY_URL="https://games.stanlink.online/${{ github.event.inputs.project_id }}/index.html"
+        
+        curl -X POST "https://stan-backend.stanleyisaac134.workers.dev/api/build/complete" \
+          -H "Authorization: Bearer $STAN_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"project_id\": \"${{ github.event.inputs.project_id }}\",
+            \"status\": \"success\",
+            \"deploy_url\": \"$PLAY_URL\",
+            \"engine\": \"godot\"
+          }"

@@ -420,7 +420,7 @@ jobs:
         run: |
           git config --global user.name "Stan Bot"
           git config --global user.email "bot@stanlink.online"
-          git clone https://${{ secrets.ACCESS_TOKEN }}@github.com/StaNLink-Inc/godotstarter.git godotstarter-repo
+          git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/StaNLink-Inc/godotstarter.git godotstarter-repo
       
       - name: Copy files to repo
         run: |
@@ -434,7 +434,7 @@ jobs:
           git commit -m "🎮 Update GodotStarter base game template" || echo "No changes to commit"
           git push origin main
         env:
-          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Success notification
         run: |
