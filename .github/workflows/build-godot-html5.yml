@@ -76,12 +76,92 @@ jobs:
         aws configure set aws_secret_access_key $R2_SECRET_KEY
         aws configure set region auto
         
-        # Download project files to godot-project directory
-        mkdir -p godot-project
-        aws s3 sync s3://$R2_SOURCE_BUCKET/${{ github.event.inputs.project_id }}/ ./godot-project/ --endpoint-url $R2_ENDPOINT
+        # Check if project exists in R2
+        echo "Checking if project exists in R2..."
+        if aws s3 ls s3://$R2_SOURCE_BUCKET/${{ github.event.inputs.project_id }}/ --endpoint-url $R2_ENDPOINT; then
+          echo "Project found in R2, downloading..."
+          # Download project files to godot-project directory
+          mkdir -p godot-project
+          aws s3 sync s3://$R2_SOURCE_BUCKET/${{ github.event.inputs.project_id }}/ ./godot-project/ --endpoint-url $R2_ENDPOINT
+          
+          echo "✅ Project downloaded"
+          ls -la godot-project/
+        else
+          echo "⚠️ Project not found in R2, creating minimal project..."
+          mkdir -p godot-project
+          
+          # Create minimal project.godot file
+          cat > godot-project/project.godot << 'EOF'
+        ; Engine configuration file.
+        ; It's best edited using the editor UI and not directly,
+        ; since the parameters that go here are not all obvious.
+        ;
+        ; Format:
+        ;   [section] ; section goes between []
+        ;   param=value ; assign values to parameters
         
-        echo "✅ Project downloaded"
-        ls -la godot-project/
+        config_version=5
+        
+        [application]
+        
+        config/name="${{ github.event.inputs.game_name }}"
+        run/main_scene="res://Main.tscn"
+        config/features=PackedStringArray("4.3", "GL Compatibility")
+        config/icon="res://icon.svg"
+        
+        [rendering]
+        
+        renderer/rendering_method="gl_compatibility"
+        renderer/rendering_method.mobile="gl_compatibility"
+        EOF
+          
+          # Create minimal main scene
+          cat > godot-project/Main.tscn << 'EOF'
+        [gd_scene load_steps=2 format=3 uid="uid://bvxvgxqahyeah"]
+        
+        [ext_resource type="Script" path="res://Main.gd" id="1_0q8yh"]
+        
+        [node name="Main" type="Node2D"]
+        script = ExtResource("1_0q8yh")
+        
+        [node name="Label" type="Label" parent="."]
+        anchors_preset = 8
+        anchor_left = 0.5
+        anchor_top = 0.5
+        anchor_right = 0.5
+        anchor_bottom = 0.5
+        offset_left = -100.0
+        offset_top = -50.0
+        offset_right = 100.0
+        offset_bottom = 50.0
+        grow_horizontal = 2
+        grow_vertical = 2
+        text = "${{ github.event.inputs.game_name }}"
+        horizontal_alignment = 1
+        vertical_alignment = 1
+        EOF
+          
+          # Create minimal main script
+          cat > godot-project/Main.gd << 'EOF'
+        extends Node2D
+        
+        # Called when the node enters the scene tree for the first time.
+        func _ready():
+        	print("Game started: ${{ github.event.inputs.game_name }}")
+        
+        # Called every frame. 'delta' is the elapsed time since the previous frame.
+        func _process(delta):
+        	pass
+        EOF
+          
+          # Create default icon
+          cat > godot-project/icon.svg << 'EOF'
+        <svg height="128" width="128" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="124" height="124" rx="14" fill="#363d52" stroke="#212532" stroke-width="4"/><g transform="scale(.101) translate(122 122)"><g fill="#fff"><path d="M105 673v33q407 354 814 0v-33z"/><path d="m105 673 152 14q12 1 15 14l4 67 132 10 8-61q2-11 15-15h162q13 4 15 15l8 61 132-10 4-67q3-13 15-14l152-14V427q30-39 56-81-35-59-83-108-43 20-82 47-40-37-88-64 7-51 8-102-59-28-123-42-26 43-46 89-49-7-98 0-20-46-46-89-64 14-123 42 1 51 8 102-48 27-88 64-39-27-82-47-48 49-83 108 26 42 56 81zm0 33v39c0 276 813 276 813 0v-39l-134 12-5 69q-2 10-14 13l-162 11q-12 0-16-11l-10-65H447l-10 65q-4 11-16 11l-162-11q-12-3-14-13l-5-69z"/><path d="M483 600c3 34 55 34 58 0v-86c-3-34-55-34-58 0z"/><path d="M481 699c-17 16-2 53 22 37 2-2 2-5 2-9V618c0-4 0-7-2-9-24-16-39 21-22 37z"/><path d="M519 699c17 16 32-21 22-37-2 2-2 5-2 9v109c0 4 0 7 2 9 10 16 5-21-22-37z"/></g></svg>
+        EOF
+          
+          echo "✅ Minimal project created"
+          ls -la godot-project/
+        fi
         
     - name: Verify Godot project
       run: |
