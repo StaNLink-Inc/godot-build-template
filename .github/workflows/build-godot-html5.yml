@@ -248,21 +248,7 @@ jobs:
             \"status\": \"success\",
             \"deploy_url\": \"$PLAY_URL\",
             \"engine\": \"godot\",
-            \"game_name\": \"${{ github.event.inputs.game_name }}\" 
-          }"
-        
-        # Send success email
-        curl -X POST "https://mailer.stanlink.online/stanlink.online/mailer1/stan-build-succesful" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"to\": \"${{ secrets.NOTIFICATION_EMAIL }}\",
-            \"sender\": \"stan\",
-            \"variables\": {
-              \"subject\": \"🎮 ${{ github.event.inputs.game_name }} - Godot Build Complete!\",
-              \"game_name\": \"${{ github.event.inputs.game_name }}\",
-              \"engine\": \"Godot\",
-              \"play_url\": \"$PLAY_URL\"
-            }
+            \"game_name\": \"${{ github.event.inputs.game_name }}\"
           }"
     
     - name: Notify build failure
@@ -279,19 +265,5 @@ jobs:
             \"project_id\": \"${{ github.event.inputs.project_id }}\",
             \"status\": \"failed\",
             \"engine\": \"godot\",
-            \"game_name\": \"${{ github.event.inputs.game_name }}"
-          }"
-        
-        # Send failure email
-        curl -X POST "https://mailer.stanlink.online/stanlink.online/mailer1/stan-build-failed" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"to\": \"${{ secrets.NOTIFICATION_EMAIL }}\",
-            \"sender\": \"stan\",
-            \"variables\": {
-              \"subject\": \"❌ ${{ github.event.inputs.game_name }} - Godot Build Failed\",
-              \"game_name\": \"${{ github.event.inputs.game_name }}\",
-              \"engine\": \"Godot\",
-              \"error_message\": \"Build failed during GitHub Actions workflow\"
-            }
+            \"game_name\": \"${{ github.event.inputs.game_name }}\"
           }"
