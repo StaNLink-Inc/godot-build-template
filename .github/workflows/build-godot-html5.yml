@@ -7,6 +7,10 @@ on:
         description: 'Project ID'
         required: true
         type: string
+      slug:
+        description: 'Game Slug'
+        required: true
+        type: string
       game_name:
         description: 'Game Name'
         required: true
@@ -225,10 +229,10 @@ jobs:
         cd godot-project
         
         # Upload to R2 (public-read is not supported by default in R2 S3 API)
-        aws s3 sync build/ s3://stan-games/${{ github.event.inputs.project_id }}/ --endpoint-url $R2_ENDPOINT
+        aws s3 sync build/ s3://stan-games/${{ github.event.inputs.slug }}/ --endpoint-url $R2_ENDPOINT
         
         # Set the play URL
-        PLAY_URL="https://games.stanlink.online/${{ github.event.inputs.project_id }}/index.html"
+        PLAY_URL="https://games.stanlink.online/${{ github.event.inputs.slug }}"
         echo "Game will be available at: $PLAY_URL"
         
     - name: Notify build completion
@@ -237,7 +241,7 @@ jobs:
         STAN_API_KEY: ${{ secrets.STAN_API_KEY }}
         STAN_BACKEND_URL: ${{ secrets.STAN_BACKEND_URL }}
       run: |
-        PLAY_URL="https://games.stanlink.online/${{ github.event.inputs.project_id }}/index.html"
+        PLAY_URL="https://games.stanlink.online/${{ github.event.inputs.slug }}"
         
         # Notify backend
         curl -X POST "$STAN_BACKEND_URL/api/build/complete" \
