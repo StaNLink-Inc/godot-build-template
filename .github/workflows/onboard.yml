@@ -1,0 +1,89 @@
+name: Onboard Godot Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'Project ID'
+        required: true
+      slug:
+        description: 'Game Slug'
+        required: true
+      game_name:
+        description: 'Game Name'
+        required: true
+      is_paid:
+        description: 'Is paid user (true/false)'
+        required: false
+        default: 'false'
+      allowed_domains:
+        description: 'Allowed domains'
+        required: false
+        default: 'games.stanlink.online,stanlink.online'
+
+jobs:
+  onboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Template Repo
+        uses: actions/checkout@v4
+
+      - name: Clone Godot Starter (The Foundation)
+        run: |
+          git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/StaNLink-Inc/godotstarter.git project
+          rm -rf project/.git
+
+      - name: Inject Configuration & Security
+        run: |
+          cd project
+          
+          # Inject placeholders in core scripts
+          sed -i 's/{{PROJECT_ID}}/${{ inputs.project_id }}/g' scripts/stan_core/StanAnalytics.gd
+          sed -i 's/{{PROJECT_ID}}/${{ inputs.project_id }}/g' scripts/stan_core/StanDomainLock.gd
+          sed -i 's/{{ALLOWED_DOMAINS}}/${{ inputs.allowed_domains }}/g' scripts/stan_core/StanDomainLock.gd
+          sed -i 's/{{IS_PAID}}/${{ inputs.is_paid }}/g' scripts/stan_core/StanAdManager.gd
+          sed -i 's/{{IS_PAID}}/${{ inputs.is_paid }}/g' scripts/stan_core/StanWatermark.gd
+          
+          # Update project.godot with game name
+          sed -i 's/config/name="StanGame"/config/name="${{ inputs.game_name }}"/g' project.godot
+          
+          # Create Stan Config JSON
+          cat > stan-config.json << JSON
+{
+  "projectId": "${{ inputs.project_id }}",
+  "slug": "${{ inputs.slug }}",
+  "gameName": "${{ inputs.game_name }}",
+  "isPaid": ${{ inputs.is_paid }},
+  "onboardedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+JSON
+
+      - name: Upload Foundation to R2
+        env:
+           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY }}
+           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_KEY }}
+           AWS_DEFAULT_REGION: auto
+        run: |
+          echo "🏗️ Syncing Godot Foundation to R2..."
+          aws s3 sync ./project s3://stan-projects/${{ inputs.project_id }}/ --endpoint-url $R2_ENDPOINT
+          echo "✅ Foundation verified in R2"
+
+      - name: Notify Backend
+        if: always()
+        env:
+          STAN_API_KEY: ${{ secrets.STAN_API_KEY }}
+          STAN_BACKEND_URL: ${{ secrets.STAN_BACKEND_URL }}
+        run: |
+          STATUS="onboarded"
+          if [ "${{ job.status }}" != "success" ]; then STATUS="failed"; fi
+          
+          curl -X POST "$STAN_BACKEND_URL/api/projects/${{ inputs.project_id }}/onboarded" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $STAN_API_KEY" \
+            -d "{
+              \"status\": \"$STATUS\",
+              \"project_id\": \"${{ inputs.project_id }}\",
+              \"engine\": \"godot\",
+              \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" 
+            }"
